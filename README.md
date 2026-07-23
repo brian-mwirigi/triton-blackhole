@@ -37,6 +37,12 @@ wsl -e bash scripts/wsl_verify.sh
 
 Verified in WSL2 Ubuntu: `triton` **installs** (manylinux wheel), package tests/demos pass. Live GPU kernels need `nvidia-smi` working inside WSL (CUDA on WSL drivers).
 
+**No local NVIDIA GPU?** Use [Google Colab](https://colab.research.google.com/) (Runtime → GPU), then open [`notebooks/colab_smoke_test.ipynb`](notebooks/colab_smoke_test.ipynb) or:
+
+```python
+!pip -q install -U triton "git+https://github.com/brian-mwirigi/triton-blackhole.git"
+```
+
 ## Quick start
 
 ```python
