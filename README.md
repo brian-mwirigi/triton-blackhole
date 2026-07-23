@@ -30,7 +30,12 @@ When `torch.allclose(triton_out, torch_ref, atol, rtol)` fails, you usually get 
 # inside WSL2 (Ubuntu) with NVIDIA CUDA drivers on the Windows host
 pip install -e ".[triton,dev]"
 python examples/demo_triton_add.py
+
+# or from Windows PowerShell:
+wsl -e bash scripts/wsl_verify.sh
 ```
+
+Verified in WSL2 Ubuntu: `triton` **installs** (manylinux wheel), package tests/demos pass. Live GPU kernels need `nvidia-smi` working inside WSL (CUDA on WSL drivers).
 
 ## Quick start
 

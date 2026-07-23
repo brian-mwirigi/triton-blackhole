@@ -7,6 +7,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.venv-wsl/
 venv/
 *.pt
 .DS_Store
