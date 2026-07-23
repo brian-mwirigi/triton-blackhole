@@ -1,142 +1,136 @@
 ﻿# triton-blackhole
 
-**Deterministic numerical bisection for Triton kernel floating-point drift.**
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brian-mwirigi/triton-blackhole/blob/main/notebooks/colab_killer_demo.ipynb)
+[![PyPI](https://img.shields.io/pypi/v/triton-blackhole)](https://pypi.org/project/triton-blackhole/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-When `torch.allclose(triton_out, torch_ref, atol, rtol)` fails, you usually get nothing but a boolean. The fallbacks are worse: `tl.device_print` floods stdout from thousands of unsynchronized threads, and `TRITON_INTERPRET=1` skips the real compiler, lacks bfloat16, and breaks on indirect loads like `tl.load(tl.load(ptr))`. **triton-blackhole** is the missing tool — localize the divergence without leaving the compiled on-device path.
+**`torch.allclose` failed. Now what?**
 
-> PyPI/import name: `triton-blackhole` / `triton_blackhole` (the bare name `blackhole` is already taken by an unrelated SMTP MTA).
+triton-blackhole is a deterministic numerical debugger for Triton kernels. It finds *where* your output diverges from a PyTorch reference — and whether it's benign fp16/bf16 drift or a real bug — **without** `tl.device_print` floods or `TRITON_INTERPRET`.
 
-## What it does
+```python
+from triton_blackhole import diagnose
 
-| Pain | triton-blackhole |
-|------|------------------|
-| `allclose` fails with no location | `compare()` → max-error indices, hotspots, per-axis peaks, neighborhoods |
-| Print-debugging floods | `ProbeBank` named stages with tensor context |
-| `TRITON_INTERPRET` useless for bf16 / indirect loads | Real compiled kernels + `bisect_tiles(program_id)` |
-| Hours hunting reduction-order vs real bugs | `classify_drift()` triage + dtype-aware tolerances |
+print(diagnose(triton_out, torch_ref))
+# → hotspot index, drift kind, minimal failing region
+```
+
+**[▶ Open the 2‑minute Colab demo](https://colab.research.google.com/github/brian-mwirigi/triton-blackhole/blob/main/notebooks/colab_killer_demo.ipynb)** (Runtime → GPU)
+
+---
+
+## The pain
+
+| You try… | What happens |
+|----------|----------------|
+| `torch.allclose(...)` | `False`. No index. No cause. |
+| `tl.device_print` | Thousands of unsynced lines. No tensor context. |
+| `TRITON_INTERPRET=1` | Breaks on bf16 / `tl.load(tl.load(...))`. Not your real kernel. |
+
+## The fix
+
+| Tool | What you get |
+|------|----------------|
+| `compare` | Max-error indices, hotspots, neighborhoods, bf16-aware tolerances |
+| `bisect_axes` | Minimal failing sub-tensor |
+| `bisect_tiles` | Failing `program_id` range on the **compiled** kernel |
+| `classify_drift` | `localized_bug` vs `reduction_order` vs `dtype_cast` vs … |
+| `ProbeBank` | Fusion-boundary stage diffs (not print spam) |
+
+```python
+from triton_blackhole import compare, bisect_axes, classify_drift, format_report
+from triton_blackhole.classify import format_classification
+
+print(format_report(compare(triton_out, torch_ref)))
+print(format_classification(classify_drift(triton_out, torch_ref)))
+print(bisect_axes(triton_out, torch_ref).report())
+```
+
+---
+
+## Install
+
+```bash
+pip install triton-blackhole
+```
+
+Optional (Linux / WSL2 / Colab with NVIDIA):
+
+```bash
+pip install triton-blackhole[triton]
+# On Colab, pin Triton to whatever torch wants, e.g.:
+# pip install "triton==3.6.0"
+```
+
+From source:
+
+```bash
+pip install -e ".[dev]"
+```
+
+---
 
 ## Platforms
 
-| Piece | Native Windows | WSL2 + NVIDIA | Native Linux + NVIDIA |
-|-------|----------------|---------------|------------------------|
-| `compare` / `bisect_axes` / `classify_drift` / `ProbeBank` / CLI | Yes (CPU torch) | Yes | Yes |
-| Live Triton kernels | No — no official Windows wheels | Yes | Yes |
+| Piece | Native Windows | WSL2 + NVIDIA | Linux + NVIDIA | Colab GPU |
+|-------|----------------|---------------|----------------|-----------|
+| Debugger (compare / bisect / classify) | ✅ | ✅ | ✅ | ✅ |
+| Live Triton kernels | ❌ | ✅ | ✅ | ✅ |
 
-**Native Windows** can run the debugger on tensors/demos, but not compile Triton kernels (`pip install triton` only ships manylinux wheels).
+No NVIDIA laptop? Use the Colab badge above.
 
-**WSL2** is the practical Windows path for the full stack: install Ubuntu in WSL2, enable NVIDIA CUDA on WSL, then `pip install torch triton` and `pip install -e ".[triton]"` inside the distro. Same Linux workflow, on your Windows machine.
+---
 
-```bash
-# inside WSL2 (Ubuntu) with NVIDIA CUDA drivers on the Windows host
-pip install -e ".[triton,dev]"
-python examples/demo_triton_add.py
-
-# or from Windows PowerShell:
-wsl -e bash scripts/wsl_verify.sh
-```
-
-Verified in WSL2 Ubuntu: `triton` **installs** (manylinux wheel), package tests/demos pass. Live GPU kernels need `nvidia-smi` working inside WSL (CUDA on WSL drivers).
-
-**No local NVIDIA GPU?** Use [Google Colab](https://colab.research.google.com/) (Runtime → GPU), then open [`notebooks/colab_smoke_test.ipynb`](notebooks/colab_smoke_test.ipynb) or:
-
-```python
-# Do NOT pip install -U triton — Colab torch pins an exact version (e.g. 3.6.0)
-!pip -q install "triton==3.6.0" "git+https://github.com/brian-mwirigi/triton-blackhole.git"
-```
-
-If you already upgraded Triton and hit a conflict warning, fix with:
-
-```python
-!pip -q install "triton==3.6.0"
-```
-
-## Quick start
-
-```python
-import torch
-from triton_blackhole import compare, bisect_axes, classify_drift, format_report
-from triton_blackhole.classify import format_classification
-from triton_blackhole.triton_hooks import diagnose
-
-triton_out = run_kernel(...)
-torch_ref = reference(...)
-
-# 1. Rich compare (bf16/fp16-aware defaults)
-print(format_report(compare(triton_out, torch_ref)))
-
-# 2. Triage: reduction_order vs localized_bug vs dtype_cast vs ...
-print(format_classification(classify_drift(triton_out, torch_ref)))
-
-# 3. Shrink to the minimal failing sub-tensor
-print(bisect_axes(triton_out, torch_ref).report())
-
-# Or one shot:
-print(diagnose(triton_out, torch_ref))
-```
-
-### Tile / `program_id` bisection
-
-Keep the compiled kernel. Teach your launcher to run only `pid ∈ [lo, hi)`:
+## Tile bisection (real kernels)
 
 ```python
 from triton_blackhole import bisect_tiles
 
 def launch(pid_lo, pid_hi):
-    # mask stores or shrink grid to [pid_lo, pid_hi)
     return run_triton_kernel(..., pid_lo=pid_lo, pid_hi=pid_hi)
 
-result = bisect_tiles(launch, torch_ref, num_programs=grid_size)
-print(result.report())  # → failing program_id range
+print(bisect_tiles(launch, torch_ref, num_programs=grid).report())
 ```
 
-### Fusion-boundary probes (not `device_print`)
+## Stage probes (not `device_print`)
 
 ```python
 from triton_blackhole.probe import ProbeBank
 
 bank = ProbeBank()
 bank.capture("pre_softmax", scores_ref, side="ref")
-bank.capture("pre_softmax", scores_tri, side="tri")  # from a debug buffer store
-bank.capture("out", out_ref, side="ref")
-bank.capture("out", out_tri, side="tri")
-print(bank.report())  # first diverging stage + full tensor context
+bank.capture("pre_softmax", scores_tri, side="tri")
+print(bank.report())  # first diverging stage
 ```
 
-### CLI
+## CLI
 
 ```bash
-# save tensors from a failing unit test, then:
 triton-blackhole compare triton_out.pt torch_ref.pt --bisect --suggest
 ```
 
+---
+
 ## Why not `TRITON_INTERPRET`?
 
-triton-blackhole never interprets the kernel. Divergence is isolated by:
+We never interpret the kernel. We bisect:
 
-1. **Output-space bisection** over tensor axes  
-2. **Grid-space bisection** over `program_id`  
-3. **Stage-space bisection** over named intermediate buffers  
+1. **Output space** (tensor axes)  
+2. **Grid space** (`program_id`)  
+3. **Stage space** (named intermediates)  
 
-All three run the same binary your production path uses — bf16, tensor cores, and indirect memory access included.
+Same binary as production — bf16, tensor cores, indirect loads included.
+
+---
 
 ## Examples
 
 ```bash
 python examples/demo_softmax_drift.py
 python examples/demo_tile_bisect.py
-python examples/demo_triton_add.py   # requires triton + CUDA
+python examples/demo_triton_add.py   # needs CUDA + triton
 ```
-
-## API map
-
-- `triton_blackhole.compare` / `localize` — structured `allclose`
-- `triton_blackhole.bisect_axes` — minimal failing sub-tensor
-- `triton_blackhole.bisect_tiles` — minimal failing `program_id` range
-- `triton_blackhole.classify_drift` — drift taxonomy
-- `triton_blackhole.probe.ProbeBank` — intermediate stage diffs
-- `triton_blackhole.tolerances` — dtype-aware / empirical atol·rtol
-- `triton_blackhole.triton_hooks.diagnose` — one-shot report
 
 ## License
 
-MIT
+MIT · [brian-mwirigi/triton-blackhole](https://github.com/brian-mwirigi/triton-blackhole)

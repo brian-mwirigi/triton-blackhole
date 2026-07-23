@@ -8,17 +8,51 @@ version = "0.1.0"
 description = "Deterministic numerical bisection debugger for Triton kernel floating-point drift"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
-authors = [{ name = "triton-blackhole Contributors" }]
-keywords = ["triton", "gpu", "numerics", "debugging", "bfloat16", "float16"]
+license = { file = "LICENSE" }
+authors = [
+  { name = "brian-mwirigi", email = "brianmwirigi@users.noreply.github.com" },
+]
+maintainers = [
+  { name = "brian-mwirigi", email = "brianmwirigi@users.noreply.github.com" },
+]
+keywords = [
+  "triton",
+  "gpu",
+  "numerics",
+  "debugging",
+  "bfloat16",
+  "float16",
+  "pytorch",
+  "allclose",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Debuggers",
+]
 dependencies = [
   "torch>=2.0",
   "numpy>=1.23",
 ]
 
+[project.urls]
+Homepage = "https://github.com/brian-mwirigi/triton-blackhole"
+Repository = "https://github.com/brian-mwirigi/triton-blackhole"
+Issues = "https://github.com/brian-mwirigi/triton-blackhole/issues"
+Changelog = "https://github.com/brian-mwirigi/triton-blackhole/releases"
+Colab = "https://colab.research.google.com/github/brian-mwirigi/triton-blackhole/blob/main/notebooks/colab_killer_demo.ipynb"
+
 [project.optional-dependencies]
 triton = ["triton>=2.1"]
-dev = ["pytest>=7.0", "ruff>=0.4"]
+dev = ["pytest>=7.0", "ruff>=0.4", "build>=1.0", "twine>=5.0"]
 
 [project.scripts]
 triton-blackhole = "triton_blackhole.cli:main"
