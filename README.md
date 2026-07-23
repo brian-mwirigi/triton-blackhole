@@ -9,10 +9,13 @@
 triton-blackhole is a deterministic numerical debugger for Triton kernels. It finds *where* your output diverges from a PyTorch reference — and whether it's benign fp16/bf16 drift or a real bug — **without** `tl.device_print` floods or `TRITON_INTERPRET`.
 
 ```python
-from triton_blackhole import diagnose
+from triton_blackhole import verify_drift
 
-print(diagnose(triton_out, torch_ref))
-# → hotspot index, drift kind, minimal failing region
+@verify_drift(torch_ref, block_sizes=(BLOCK_M, BLOCK_N))
+def run(a, b):
+    return launch_triton(a, b)
+
+run(a, b)  # silent if OK; AssertionError + drift artifact if not
 ```
 
 **[▶ Open the 2‑minute Colab demo](https://colab.research.google.com/github/brian-mwirigi/triton-blackhole/blob/main/notebooks/colab_killer_demo.ipynb)** (Runtime → GPU)
@@ -27,23 +30,50 @@ print(diagnose(triton_out, torch_ref))
 | `tl.device_print` | Thousands of unsynced lines. No tensor context. |
 | `TRITON_INTERPRET=1` | Breaks on bf16 / `tl.load(tl.load(...))`. Not your real kernel. |
 
-## The fix
+## The fix (TritonDrift loop)
 
-| Tool | What you get |
-|------|----------------|
-| `compare` | Max-error indices, hotspots, neighborhoods, bf16-aware tolerances |
-| `bisect_axes` | Minimal failing sub-tensor |
-| `bisect_tiles` | Failing `program_id` range on the **compiled** kernel |
-| `classify_drift` | `localized_bug` vs `reduction_order` vs `dtype_cast` vs … |
-| `ProbeBank` | Fusion-boundary stage diffs (not print spam) |
+| Feature | What you get |
+|---------|----------------|
+| `@verify_drift` | Drop-in decorator: capture inputs, compare, emit artifact |
+| Output → `program_id` | Map hotspot `[i,j]` → tile / `program_id` via `BLOCK_*` |
+| AST probe injection | Rewrite kernel AST; dump intermediates **only** on the failing pid |
+| Precision-aware diff | bf16/fp16 tolerances + `classify_drift` |
+| Terminal artifact | Failing block, expected vs actual, probe stats |
 
 ```python
-from triton_blackhole import compare, bisect_axes, classify_drift, format_report
-from triton_blackhole.classify import format_classification
+from triton_blackhole import verify_drift, run_drift_verify, index_to_program_id
 
-print(format_report(compare(triton_out, torch_ref)))
-print(format_classification(classify_drift(triton_out, torch_ref)))
-print(bisect_axes(triton_out, torch_ref).report())
+# Decorator (pytest-friendly)
+@verify_drift(torch_ref, block_sizes=(32, 32), raise_on_fail=True)
+def run(a, b):
+    return triton_launch(a, b)
+
+# Or functional
+art = run_drift_verify(tri_out, ref_out, block_sizes=(32, 32))
+print(art.report())  # compare + grid map + bisect
+```
+
+### Optional: AST dump on the failing block
+
+```python
+def relaunch(ikernel, failing_pid, debug_buf, a, b):
+    out = torch.empty_like(...)
+    ikernel[(grid,)](
+        a, b, out, ...,
+        _bh_dbg_ptr=debug_buf,
+        _BH_FAILING_PID=failing_pid,
+    )
+    return out
+
+@verify_drift(
+    torch_ref,
+    block_sizes=(BLOCK_M, BLOCK_N),
+    kernel=my_kernel,          # original @triton.jit fn
+    probes=["acc"],            # local names assigned in the kernel
+    relaunch=relaunch,
+)
+def run(a, b):
+    return launch(a, b)
 ```
 
 ---
@@ -126,9 +156,11 @@ Same binary as production — bf16, tensor cores, indirect loads included.
 ## Examples
 
 ```bash
+python examples/demo_verify_drift.py
+python examples/demo_verify_ast_triton.py  # needs CUDA + triton
 python examples/demo_softmax_drift.py
 python examples/demo_tile_bisect.py
-python examples/demo_triton_add.py   # needs CUDA + triton
+python examples/demo_triton_add.py
 ```
 
 ## License
