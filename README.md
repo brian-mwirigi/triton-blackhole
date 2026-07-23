@@ -17,19 +17,19 @@ When `torch.allclose(triton_out, torch_ref, atol, rtol)` fails, you usually get 
 
 ## Platforms
 
-| Piece | Windows | Linux (NVIDIA GPU) |
-|-------|---------|--------------------|
-| `compare` / `bisect_axes` / `classify_drift` / `ProbeBank` / CLI | Yes (CPU torch is enough) | Yes |
-| Live Triton kernels (`bisect_tiles` on real grids, `demo_triton_add`) | No — official `triton` wheels are **manylinux only** | Yes — CUDA GPU required |
+| Piece | Native Windows | WSL2 + NVIDIA | Native Linux + NVIDIA |
+|-------|----------------|---------------|------------------------|
+| `compare` / `bisect_axes` / `classify_drift` / `ProbeBank` / CLI | Yes (CPU torch) | Yes | Yes |
+| Live Triton kernels | No — no official Windows wheels | Yes | Yes |
 
-**Who this is for:** kernel authors debugging on **Linux + NVIDIA**. Windows users can still run the debugger on saved `.pt` tensors / CPU stand-ins (the demos do exactly that). Writing and launching Triton kernels themselves is a Linux workflow.
+**Native Windows** can run the debugger on tensors/demos, but not compile Triton kernels (`pip install triton` only ships manylinux wheels).
 
-## Install
+**WSL2** is the practical Windows path for the full stack: install Ubuntu in WSL2, enable NVIDIA CUDA on WSL, then `pip install torch triton` and `pip install -e ".[triton]"` inside the distro. Same Linux workflow, on your Windows machine.
 
 ```bash
-pip install -e .
-# optional (Linux + NVIDIA only)
+# inside WSL2 (Ubuntu) with NVIDIA CUDA drivers on the Windows host
 pip install -e ".[triton,dev]"
+python examples/demo_triton_add.py
 ```
 
 ## Quick start
