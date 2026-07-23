@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triton-blackhole"
+version = "0.1.0"
+description = "Deterministic numerical bisection debugger for Triton kernel floating-point drift"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "triton-blackhole Contributors" }]
+keywords = ["triton", "gpu", "numerics", "debugging", "bfloat16", "float16"]
+dependencies = [
+  "torch>=2.0",
+  "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+triton = ["triton>=2.1"]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+
+[project.scripts]
+triton-blackhole = "triton_blackhole.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["triton_blackhole*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
