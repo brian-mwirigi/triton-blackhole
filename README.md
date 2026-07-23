@@ -40,7 +40,14 @@ Verified in WSL2 Ubuntu: `triton` **installs** (manylinux wheel), package tests/
 **No local NVIDIA GPU?** Use [Google Colab](https://colab.research.google.com/) (Runtime → GPU), then open [`notebooks/colab_smoke_test.ipynb`](notebooks/colab_smoke_test.ipynb) or:
 
 ```python
-!pip -q install -U triton "git+https://github.com/brian-mwirigi/triton-blackhole.git"
+# Do NOT pip install -U triton — Colab torch pins an exact version (e.g. 3.6.0)
+!pip -q install "triton==3.6.0" "git+https://github.com/brian-mwirigi/triton-blackhole.git"
+```
+
+If you already upgraded Triton and hit a conflict warning, fix with:
+
+```python
+!pip -q install "triton==3.6.0"
 ```
 
 ## Quick start
