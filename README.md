@@ -15,11 +15,20 @@ When `torch.allclose(triton_out, torch_ref, atol, rtol)` fails, you usually get 
 | `TRITON_INTERPRET` useless for bf16 / indirect loads | Real compiled kernels + `bisect_tiles(program_id)` |
 | Hours hunting reduction-order vs real bugs | `classify_drift()` triage + dtype-aware tolerances |
 
+## Platforms
+
+| Piece | Windows | Linux (NVIDIA GPU) |
+|-------|---------|--------------------|
+| `compare` / `bisect_axes` / `classify_drift` / `ProbeBank` / CLI | Yes (CPU torch is enough) | Yes |
+| Live Triton kernels (`bisect_tiles` on real grids, `demo_triton_add`) | No — official `triton` wheels are **manylinux only** | Yes — CUDA GPU required |
+
+**Who this is for:** kernel authors debugging on **Linux + NVIDIA**. Windows users can still run the debugger on saved `.pt` tensors / CPU stand-ins (the demos do exactly that). Writing and launching Triton kernels themselves is a Linux workflow.
+
 ## Install
 
 ```bash
 pip install -e .
-# optional
+# optional (Linux + NVIDIA only)
 pip install -e ".[triton,dev]"
 ```
 
